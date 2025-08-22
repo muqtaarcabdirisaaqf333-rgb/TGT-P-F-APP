@@ -1,0 +1,398 @@
+class BusinessDashboard {
+    constructor() {
+        this.clients = JSON.parse(localStorage.getItem('business-clients')) || this.getMockData();
+        this.currentEditId = null;
+        this.init();
+    }
+
+    init() {
+        this.renderClientsTable();
+        this.updateFinancialSummary();
+        this.setupEventListeners();
+        this.updateCurrentDate();
+        this.updateClientsCount();
+    }
+
+    getMockData() {
+        return [
+            {
+                id: 1,
+                account: 'ACC001',
+                name: 'John Doe Enterprises',
+                balanceUSD: 15000,
+                balanceKES: 1500000,
+                status: 'active',
+                lastUpdated: '2024-01-15'
+            },
+            {
+                id: 2,
+                account: 'ACC002',
+                name: 'Jane Smith Ltd',
+                balanceUSD: -5000,
+                balanceKES: -500000,
+                status: 'active',
+                lastUpdated: '2024-01-14'
+            },
+            {
+                id: 3,
+                account: 'ACC003',
+                name: 'Mike Johnson & Co',
+                balanceUSD: 25000,
+                balanceKES: 2500000,
+                status: 'inactive',
+                lastUpdated: '2024-01-10'
+            },
+            {
+                id: 4,
+                account: 'ACC004',
+                name: 'Sarah Wilson Trading',
+                balanceUSD: 8000,
+                balanceKES: 800000,
+                status: 'active',
+                lastUpdated: '2024-01-12'
+            },
+            {
+                id: 5,
+                account: 'ACC005',
+                name: 'David Brown Import/Export',
+                balanceUSD: -12000,
+                balanceKES: -1200000,
+                status: 'active',
+                lastUpdated: '2024-01-13'
+            }
+        ];
+    }
+
+    updateCurrentDate() {
+        const now = new Date();
+        const options = { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        };
+        document.getElementById('current-date').textContent = now.toLocaleDateString('en-US', options);
+    }
+
+    updateClientsCount() {
+        document.getElementById('clients-count').textContent = this.clients.length;
+    }
+
+    updateFinancialSummary() {
+        const cashUSD = this.clients.reduce((sum, client) => sum + Math.max(0, client.balanceUSD), 0);
+        const cashKES = this.clients.reduce((sum, client) => sum + Math.max(0, client.balanceKES), 0);
+        
+        const receivableUSD = this.clients.reduce((sum, client) => sum + Math.min(0, client.balanceUSD), 0);
+        const receivableKES = this.clients.reduce((sum, client) => sum + Math.min(0, client.balanceKES), 0);
+        
+        const payableUSD = this.clients.reduce((sum, client) => sum + (client.balanceUSD < 0 ? Math.abs(client.balanceUSD) : 0), 0);
+        const payableKES = this.clients.reduce((sum, client) => sum + (client.balanceKES < 0 ? Math.abs(client.balanceKES) : 0), 0);
+
+        document.getElementById('cash-usd').textContent = this.formatCurrency(cashUSD, 'USD');
+        document.getElementById('cash-kes').textContent = this.formatCurrency(cashKES, 'KES');
+        document.getElementById('receivable-usd').textContent = this.formatCurrency(receivableUSD, 'USD');
+        document.getElementById('receivable-kes').textContent = this.formatCurrency(receivableKES, 'KES');
+        document.getElementById('payable-usd').textContent = this.formatCurrency(payableUSD, 'USD');
+        document.getElementById('payable-kes').textContent = this.formatCurrency(payableKES, 'KES');
+    }
+
+    formatCurrency(amount, currency) {
+        const formatter = new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currency,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+        
+        return formatter.format(amount).replace('USD', '').replace('KES', '').trim();
+    }
+
+    renderClientsTable(filteredClients = null) {
+        const clientsToRender = filteredClients || this.clients;
+        const tableBody = document.getElementById('clients-table-body');
+        tableBody.innerHTML = '';
+
+        clientsToRender.forEach(client => {
+            const row = document.createElement('tr');
+            
+            const usdClass = client.balanceUSD >= 0 ? 'text-positive' : 'text-negative';
+            const kesClass = client.balanceKES >= 0 ? 'text-positive' : 'text-negative';
+            const statusClass = client.status === 'active' ? 'status-active' : 'status-inactive';
+            
+            row.innerHTML = `
+                <td>
+                    <strong>${client.account}</strong>
+                </td>
+                <td>
+                    <div class="client-name">${client.name}</div>
+                    <small class="text-muted">Last updated: ${client.lastUpdated}</small>
+                </td>
+                <td>
+                    <div class="${usdClass}">USD ${this.formatCurrency(client.balanceUSD, 'USD')}</div>
+                    <div class="${kesClass}">KES ${this.formatCurrency(client.balanceKES, 'KES')}</div>
+                </td>
+                <td>
+                    <span class="status-badge ${statusClass}">${client.status}</span>
+                </td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="btn-action edit-btn" onclick="dashboard.editClient(${client.id})">
+                            ✏️ Edit
+                        </button>
+                        <button class="btn-action delete-btn" onclick="dashboard.deleteClient(${client.id})">
+                            🗑️ Delete
+                        </button>
+                    </div>
+                </td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+    }
+
+    setupEventListeners() {
+        // Search functionality
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            this.filterClients(e.target.value);
+        });
+
+        // Status filter
+        document.getElementById('status-filter').addEventListener('change', (e) => {
+            this.filterByStatus(e.target.value);
+        });
+    }
+
+    filterClients(searchTerm) {
+        const filtered = this.clients.filter(client => 
+            client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            client.account.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        this.renderClientsTable(filtered);
+    }
+
+    filterByStatus(status) {
+        if (status === 'all') {
+            this.renderClientsTable();
+        } else {
+            const filtered = this.clients.filter(client => client.status === status);
+            this.renderClientsTable(filtered);
+        }
+    }
+
+    openModalForEdit(clientId) {
+        this.currentEditId = clientId;
+        const client = this.clients.find(c => c.id === clientId);
+        
+        if (client) {
+            document.getElementById('modal-title').textContent = 'Edit Client';
+            document.getElementById('account-number').value = client.account;
+            document.getElementById('client-name').value = client.name;
+            document.getElementById('balance-usd').value = client.balanceUSD;
+            document.getElementById('balance-kes').value = client.balanceKES;
+            document.getElementById('client-status').value = client.status;
+            
+            document.getElementById('account-number').disabled = true;
+            
+            openClientModal();
+        }
+    }
+
+    openModalForAdd() {
+        this.currentEditId = null;
+        document.getElementById('modal-title').textContent = 'Add New Client';
+        document.getElementById('client-form').reset();
+        document.getElementById('account-number').disabled = false;
+        
+        openClientModal();
+    }
+
+    handleFormSubmit(event) {
+        event.preventDefault();
+        
+        const formData = {
+            account: document.getElementById('account-number').value,
+            name: document.getElementById('client-name').value,
+            balanceUSD: parseFloat(document.getElementById('balance-usd').value),
+            balanceKES: parseFloat(document.getElementById('balance-kes').value),
+            status: document.getElementById('client-status').value,
+            lastUpdated: new Date().toISOString().split('T')[0]
+        };
+
+        if (this.currentEditId) {
+            // Update existing client
+            this.updateClient(this.currentEditId, formData);
+        } else {
+            // Add new client
+            this.addClient(formData);
+        }
+        
+        closeClientModal();
+    }
+
+    addClient(clientData) {
+        const newClient = {
+            id: Date.now(),
+            ...clientData
+        };
+        
+        this.clients.push(newClient);
+        this.saveData();
+        this.renderClientsTable();
+        this.updateFinancialSummary();
+        this.updateClientsCount();
+        
+        this.showNotification('Client added successfully!', 'success');
+    }
+
+    updateClient(clientId, clientData) {
+        const index = this.clients.findIndex(client => client.id === clientId);
+        if (index !== -1) {
+            this.clients[index] = { ...this.clients[index], ...clientData };
+            this.saveData();
+            this.renderClientsTable();
+            this.updateFinancialSummary();
+            
+            this.showNotification('Client updated successfully!', 'success');
+        }
+    }
+
+    editClient(clientId) {
+        this.openModalForEdit(clientId);
+    }
+
+    deleteClient(clientId) {
+        if (confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
+            this.clients = this.clients.filter(client => client.id !== clientId);
+            this.saveData();
+            this.renderClientsTable();
+            this.updateFinancialSummary();
+            this.updateClientsCount();
+            
+            this.showNotification('Client deleted successfully!', 'warning');
+        }
+    }
+
+    saveData() {
+        localStorage.setItem('business-clients', JSON.stringify(this.clients));
+    }
+
+    exportToCSV() {
+        let csv = 'Account,Name,Balance USD,Balance KES,Status,Last Updated\n';
+        
+        this.clients.forEach(client => {
+            csv += `"${client.account}","${client.name}",${client.balanceUSD},${client.balanceKES},${client.status},${client.lastUpdated}\n`;
+        });
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `clients_export_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        this.showNotification('CSV exported successfully!', 'success');
+    }
+
+    showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+            <span>${message}</span>
+            <button onclick="this.parentElement.remove()">&times;</button>
+        `;
+        
+        // Add styles for notification
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            background: ${type === 'success' ? '#d4edda' : type === 'warning' ? '#fff3cd' : '#d1ecf1'};
+            color: ${type === 'success' ? '#155724' : type === 'warning' ? '#856404' : '#0c5460'};
+            border: 1px solid ${type === 'success' ? '#c3e6cb' : type === 'warning' ? '#ffeaa7' : '#bee5eb'};
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            animation: slideIn 0.3s ease;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.remove();
+            }
+        }, 5000);
+    }
+}
+
+// Global functions for modal handling
+function openClientModal() {
+    document.getElementById('client-modal').style.display = 'block';
+}
+
+function closeClientModal() {
+    document.getElementById('client-modal').style.display = 'none';
+}
+
+function handleFormSubmit(event) {
+    dashboard.handleFormSubmit(event);
+}
+
+function exportToCSV() {
+    dashboard.exportToCSV();
+}
+
+// Initialize the dashboard when the page loads
+const dashboard = new BusinessDashboard();
+
+// Close modal if clicked outside
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('client-modal');
+    if (event.target === modal) {
+        closeClientModal();
+    }
+});
+
+// Add some CSS for notifications
+const notificationStyles = `
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.notification {
+    transition: all 0.3s ease;
+}
+
+.notification button {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+`;
+
+const styleSheet = document.createElement('style');
+styleSheet.textContent = notificationStyles;
+document.head.appendChild(styleSheet);
